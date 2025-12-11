@@ -1,0 +1,20 @@
+# Ignorar arquivos de ambiente (SEGURANÇA MÁXIMA)
+.env
+
+# Ignorar arquivos compilados do Python
+__pycache__/
+*.pyc
+
+# Ignorar pastas de IDE e Sistema
+.vscode/
+.idea/
+.DS_Store
+
+# Ignorar logs
+log/
+
+# --- Python Lixo ---
+__pycache__/
+*.pyc
+.venv/
+venv/
