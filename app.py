@@ -95,7 +95,7 @@ def tarefa_do_bot():
 # ----------------------
 def main():
     # Define o horário (Formato 24h)
-    HORARIO_AGENDADO = "22:35"
+    HORARIO_AGENDADO = "23:51"
     
     print(f"🤖 Bot iniciado em modo automático.")
     print(f"📅 O relatório será enviado todo dia às {HORARIO_AGENDADO} (Horário do Sistema).")
