@@ -1,75 +1,112 @@
-# services/notifier_telegram.py
+# C:\inteligencia_bots\tips_bot\services\notifier_telegram.py
 import requests
+import math
 from dotenv import dotenv_values
 
 config = dotenv_values(".env")
-
-# Apenas carrega do arquivo. Se não existir, será None.
 TOKEN = config.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = config.get("TELEGRAM_CHAT_ID")
 
-def formatar_bilhete(dados_jogo):
-    m_nome = dados_jogo['principal']
-    v_nome = dados_jogo['visitor']
+def calcular_linha_jogador(ppg):
+    """
+    Arredonda para baixo para o múltiplo de 5 mais próximo.
+    Ex: 32.5 -> 30+ | 28.9 -> 25+ | 14.0 -> 10+
+    """
+    if ppg < 10: return "10+"
+    linha = math.floor(ppg / 5) * 5
+    return f"{linha}+"
+
+def get_sobrenome(nome_completo):
+    if not nome_completo: return ""
+    return nome_completo.split()[-1]
+
+def get_nome_curto_time(nome_time):
+    if not nome_time: return ""
+    return nome_time.split()[-1]
+
+def formatar_bilhete(dados):
+    m_nome = dados['principal']
+    v_nome = dados['visitor']
+    m_nome_curto = get_nome_curto_time(m_nome)
+    v_nome_curto = get_nome_curto_time(v_nome)
+
+    # 1. CABEÇALHO
+    msg = f"🏀 {v_nome} x {m_nome}\n\n"
     
-    msg = f"🚨 **Atenção** ao seguinte jogo de hoje:\n\n"
-    msg += f"🏀 **{v_nome} X {m_nome}**\n\n"
+    # 2. CONFRONTO
+    msg += "📊 CONFRONTO\n\n" # Adicionado espaçamento extra
     
-    motivos = []
-    if dados_jogo['m_media_3'] > 100:
-        motivos.append(f"Nos últimos jogos a média do **{m_nome}** foi superior a 100 pontos ({dados_jogo['m_media_3']:.1f}).")
-    if dados_jogo['v_media_3'] > 100:
-        motivos.append(f"Nos últimos jogos a média do **{v_nome}** foi superior a 100 pontos ({dados_jogo['v_media_3']:.1f}).")
-    
-    msg += "\n".join(motivos) + "\n\n"
-    msg += "E os principais pontuadores têm marcado presença:\n\n"
-    
-    # Visitante
-    v_basket = dados_jogo['v_basket']
-    v_status = dados_jogo['v_status']
-    v_reserv = dados_jogo['v_reserv']
-    
-    msg += f"👤 **Principal Pontuador {v_nome}:**\n"
-    if v_status and "out" in str(v_status).lower():
-        msg += f"⚠️ {v_basket} está **FORA** ({v_status}).\n"
-        msg += f"👀 Fique de olho em: **{v_reserv}** (2º maior pontuador)."
+    analise_ia = dados.get('confronto_analise')
+    if analise_ia:
+        # Tenta melhorar o espaçamento entre os tópicos da IA para não ficarem colados
+        # Troca quebras simples por duplas para dar o ar que você pediu
+        texto_formatado = analise_ia.replace("\n", "\n\n")
+        msg += texto_formatado + "\n"
     else:
-        status_txt = "✅ Jogando" if not v_status or v_status == "Active" else f"⚠️ {v_status}"
-        msg += f"🔥 **{v_basket}** ({status_txt})"
+        msg += "• Aguardando análise detalhada...\n"
+
+    msg += "\n"
     
-    msg += "\n\n"
+    # 3. DESTAQUES
+    msg += "⭐ DESTAQUES\n\n" # Adicionado espaçamento extra
+    
+    m_basket = dados['m_basket']
+    if m_basket and m_basket != "N/A":
+        msg += f"🔥 {m_basket} ({m_nome_curto})\n"
+    
+    v_basket = dados['v_basket']
+    if v_basket and v_basket != "N/A":
+        msg += f"🔥 {v_basket} ({v_nome_curto})\n"
+    
+    msg += "\n" + "-"*36 + "\n\n"
+    
+    # 4. POSSÍVEIS ENTRADAS
+    msg += "🔥 POSSÍVEIS ENTRADAS\n\n" # Adicionado espaçamento extra
+    
+    # --- BLOCO DE TIMES ---
+    tem_times = False
+    if dados['v_media_3'] > 100:
+        msg += f"🏀 {v_nome_curto} 110+ pontos\n"
+        tem_times = True
+    if dados['m_media_3'] > 100:
+        msg += f"🏀 {m_nome_curto} 110+ pontos\n"
+        tem_times = True
+    
+    # Adiciona espaço entre Times e Jogadores se houver times listados
+    if tem_times:
+        msg += "\n"
+    
+    # --- BLOCO DE JOGADORES ---
+    # Visitante
+    v_ppg = dados.get('v_basket_ppg', 0)
+    v_status = dados.get('v_status', '')
+    if v_basket and v_basket != "N/A":
+        if "out" not in str(v_status).lower():
+            msg += f"👤 {get_sobrenome(v_basket)} {calcular_linha_jogador(v_ppg)} pontos\n"
+        else:
+            v_reserv = dados.get('v_reserv')
+            v_reserv_ppg = dados.get('v_reserv_ppg', 0)
+            if v_reserv:
+                msg += f"👤 {get_sobrenome(v_reserv)} {calcular_linha_jogador(v_reserv_ppg)} pontos\n"
 
     # Mandante
-    m_basket = dados_jogo['m_basket']
-    m_status = dados_jogo['m_status']
-    m_reserv = dados_jogo['m_reserv']
-    
-    msg += f"👤 **Principal Pontuador {m_nome}:**\n"
-    if m_status and "out" in str(m_status).lower():
-        msg += f"⚠️ {m_basket} está **FORA** ({m_status}).\n"
-        msg += f"👀 Fique de olho em: **{m_reserv}** (2º maior pontuador)."
-    else:
-        status_txt = "✅ Jogando" if not m_status or m_status == "Active" else f"⚠️ {m_status}"
-        msg += f"🔥 **{m_basket}** ({status_txt})"
+    m_ppg = dados.get('m_basket_ppg', 0)
+    m_status = dados.get('m_status', '')
+    if m_basket and m_basket != "N/A":
+        if "out" not in str(m_status).lower():
+            msg += f"👤 {get_sobrenome(m_basket)} {calcular_linha_jogador(m_ppg)} pontos\n"
+        else:
+            m_reserv = dados.get('m_reserv')
+            m_reserv_ppg = dados.get('m_reserv_ppg', 0)
+            if m_reserv:
+                msg += f"👤 {get_sobrenome(m_reserv)} {calcular_linha_jogador(m_reserv_ppg)} pontos\n"
 
     return msg
 
 def enviar_telegram(dados_jogo):
-    if not TOKEN or not CHAT_ID:
-        print("❌ ERRO: Token ou Chat ID não encontrados no .env!")
-        return
-
-    mensagem = formatar_bilhete(dados_jogo)
-    
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": mensagem,
-        "parse_mode": "Markdown"
-    }
-    
+    if not TOKEN or not CHAT_ID: return
     try:
-        requests.post(url, json=payload)
-        print("✅ Bilhete enviado para o Telegram.")
+        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": formatar_bilhete(dados_jogo)})
+        print("✅ Bilhete enviado.")
     except Exception as e:
-        print(f"❌ Erro ao enviar Telegram: {e}")
+        print(f"❌ Erro Telegram: {e}")

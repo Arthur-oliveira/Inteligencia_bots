@@ -1,0 +1,6 @@
+requests
+python-dotenv
+psycopg2-binary
+nba_api
+pandas
+google-generativeai
