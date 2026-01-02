@@ -1,88 +1,72 @@
 # C:\inteligencia_bots\tips_bot\services\ai_generator.py
 import google.generativeai as genai
+import os
 from dotenv import dotenv_values
 
-# Carrega a API KEY do .env
-config = dotenv_values(".env")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_path = os.path.join(BASE_DIR, ".env")
+config = dotenv_values(env_path)
 api_key = config.get("GEMINI_API_KEY")
 
+MSG_PADRAO = "• Ritmo de jogo intenso com transições rápidas.\n• Expectativa de alta eficiência ofensiva de ambos os lados.\n• Tendência de placar elevado baseada no histórico recente."
+
+MODELOS_APROVADOS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash-lite",
+    "gemini-flash-lite-latest"
+]
+
 def gerar_analise_confronto(mandante, visitante, m_media, v_media):
-    """
-    Usa o Gemini para gerar análise com temperatura controlada.
-    Se falhar, retorna texto padrão fixo.
-    """
-    
-    # MENSAGEM PADRÃO (Caso a IA falhe ou não tenha chave)
-    MSG_PADRAO = "• Ritmo de jogo intenso.\n\n• Tendência de placar alto."
-
-    if not api_key:
-        return MSG_PADRAO
-
+    """Gera uma frase única mencionando obrigatoriamente os times e focada no futuro."""
+    if not api_key: return MSG_PADRAO
     genai.configure(api_key=api_key)
-
-    # 1. CONTROLE DE TEMPERATURA (ANTI-ALUCINAÇÃO)
-    # temperature 0.2 = Muito focado/conservador (Evita invenções)
-    config_ia = genai.GenerationConfig(
-        temperature=0.2,
-        top_p=0.95,
-        top_k=40,
-        max_output_tokens=300,
-    )
-
-    # 2. LISTA RÍGIDA DE MODELOS APROVADOS
-    # O robô tentará estritamente nesta ordem.
-    modelos_aprovados = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-001",
-        "gemini-2.0-flash-lite",
-        "gemini-flash-lite-latest"
-    ]
-
-    # Contexto para o prompt
-    contexto = ""
-    if m_media > 100 and v_media > 100:
-        contexto = "Ambos os times com ataques fortes (média > 100). Jogo rápido."
-    elif m_media > 100:
-        contexto = f"Apenas o {mandante} vem forte no ataque."
-    elif v_media > 100:
-        contexto = f"Apenas o {visitante} vem forte no ataque."
+    config_ia = genai.GenerationConfig(temperature=0.8, top_p=0.95, max_output_tokens=150)
 
     prompt = f"""
-    Aja como um analista especialista em NBA.
-    Escreva 1 bullet points curto sobre o jogo: {visitante} vs {mandante}.
+    Aja como um analista de NBA experiente. 
+    Escreva APENAS UMA FRASE curta e natural sobre o jogo que VAI ACONTECER entre {visitante} e {mandante}.
     
-    DADOS:
-    - Média {visitante}: {v_media:.1f} pts
-    - Média {mandante}: {m_media:.1f} pts
-    - Contexto: {contexto}
-
     REGRAS RÍGIDAS:
-    1. Use emojis no início.
-    2. Fale de ritmo, ataque e defesa.
-    3. NÃO invente lesões ou dados que não estão aqui.
-    4. Seja direto. Sem enrolação.
+    1. Você DEVE incluir o nome dos dois times ({visitante} e {mandante}) na frase.
+    2. Use o tempo verbal no FUTURO (ex: "vai ser", "promete", "deve").
+    3. Proibido textos longos ou listas. Apenas uma linha de impacto.
+    4. JAMAIS escreva médias de pontos numéricas.
+    5. Comece com um emoji de basquete ou fogo.
     """
 
-    # 3. LOOP DE TENTATIVA (Tenta apenas os aprovados)
-    for modelo_nome in modelos_aprovados:
+    for modelo_nome in MODELOS_APROVADOS:
         try:
-            # print(f"   🤖 Tentando modelo: {modelo_nome}...") # Debug opcional
-            model = genai.GenerativeModel(
-                model_name=modelo_nome,
-                generation_config=config_ia
-            )
+            model = genai.GenerativeModel(model_name=modelo_nome, generation_config=config_ia)
             response = model.generate_content(prompt)
-            
-            # Validação simples: se vier vazio, força erro para tentar o próximo
-            texto = response.text.strip()
-            if not texto: raise Exception("Resposta vazia da IA")
-            
-            return texto
-        
-        except Exception as e:
-            print(f"   ⚠️ Falha com {modelo_nome}: {e}")
-            continue # Pula para o próximo modelo da lista
+            texto = response.text.strip().replace("*", "")
+            if texto: return texto
+        except: continue
+    return f"🏀 {visitante} e {mandante} prometem um duelo intenso com jogadas de tirar o fôlego."
 
-    # 4. FALLBACK FINAL (Se todos falharem)
-    print("   ❌ IA indisponível. Usando mensagem padrão.")
-    return MSG_PADRAO
+def comentar_jogador_ia(nome_jogador, eh_reserva=False):
+    """Gera comentários naturais de até 7 palavras no futuro e sem repetir o nome."""
+    if not api_key: return "Promete incendiar a quadra hoje"
+    genai.configure(api_key=api_key)
+    config_ia = genai.GenerationConfig(temperature=0.9)
+    
+    contexto = f"O jogador {nome_jogador} assume a responsabilidade pois o principal está fora." if eh_reserva else f"O craque {nome_jogador} chega voando."
+
+    prompt = f"""
+    Comente o que o {nome_jogador} VAI fazer no jogo de hoje em no máximo 7 palavras.
+    Estilo: Resenha de basquete, natural e focado no FUTURO.
+    
+    REGRAS:
+    1. PROIBIDO repetir o nome "{nome_jogador}". 
+    2. PROIBIDO prometer pontos exatos.
+    3. Foque na vibe: "vai incendiar a quadra", "domina o garrafão e crava", "explode no ataque hoje".
+    """
+
+    for modelo_nome in MODELOS_APROVADOS:
+        try:
+            model = genai.GenerativeModel(model_name=modelo_nome, generation_config=config_ia)
+            response = model.generate_content(prompt)
+            res = response.text.strip().replace("*", "").replace("(", "").replace(")", "").replace(".", "")
+            if res: return res
+        except: continue
+    return "Promete comandar as ações ofensivas hoje"
