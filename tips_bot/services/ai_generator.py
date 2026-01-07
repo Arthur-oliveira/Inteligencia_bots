@@ -1,72 +1,53 @@
-# C:\inteligencia_bots\tips_bot\services\ai_generator.py
-import google.generativeai as genai
 import os
-from dotenv import dotenv_values
+import random
+from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-env_path = os.path.join(BASE_DIR, ".env")
-config = dotenv_values(env_path)
-api_key = config.get("GEMINI_API_KEY")
+load_dotenv()
 
-MSG_PADRAO = "• Ritmo de jogo intenso com transições rápidas.\n• Expectativa de alta eficiência ofensiva de ambos os lados.\n• Tendência de placar elevado baseada no histórico recente."
+# ======================
+# GERADOR DE BILHETE
+# ======================
+def gerar_bilhete(
+    mandante,
+    visitante,
+    m_media,
+    v_media,
+    m_basket,
+    v_basket
+):
+    confronto_templates = [
+        f"{mandante} chega com ataque eficiente e bom aproveitamento recente, enquanto {visitante} tenta equilibrar o confronto com intensidade defensiva. Jogo com tendência ofensiva.",
+        f"Confronto interessante entre {mandante} e {visitante}, com ambos apresentando ritmo acelerado nos últimos jogos e boas opções ofensivas.",
+        f"{mandante} vem mostrando consistência ofensiva, enquanto {visitante} aposta na velocidade e transição rápida para pontuar.",
+        f"{visitante} enfrenta um desafio fora de casa contra {mandante}, que tem mantido médias elevadas e bom controle de jogo.",
+        f"Duelo que promete pontos, com {mandante} e {visitante} apresentando ataques produtivos nas últimas partidas."
+    ]
 
-MODELOS_APROVADOS = [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-001",
-    "gemini-2.0-flash-lite",
-    "gemini-flash-lite-latest"
-]
+    confronto = random.choice(confronto_templates)
 
-def gerar_analise_confronto(mandante, visitante, m_media, v_media):
-    """Gera uma frase única mencionando obrigatoriamente os times e focada no futuro."""
-    if not api_key: return MSG_PADRAO
-    genai.configure(api_key=api_key)
-    config_ia = genai.GenerationConfig(temperature=0.8, top_p=0.95, max_output_tokens=150)
+    entradas = []
 
-    prompt = f"""
-    Aja como um analista de NBA experiente. 
-    Escreva APENAS UMA FRASE curta e natural sobre o jogo que VAI ACONTECER entre {visitante} e {mandante}.
-    
-    REGRAS RÍGIDAS:
-    1. Você DEVE incluir o nome dos dois times ({visitante} e {mandante}) na frase.
-    2. Use o tempo verbal no FUTURO (ex: "vai ser", "promete", "deve").
-    3. Proibido textos longos ou listas. Apenas uma linha de impacto.
-    4. JAMAIS escreva médias de pontos numéricas.
-    5. Comece com um emoji de basquete ou fogo.
-    """
+    if m_media >= 110:
+        entradas.append(f"🏀 {mandante} 110+ pontos")
+    if v_media >= 110:
+        entradas.append(f"🏀 {visitante} 110+ pontos")
 
-    for modelo_nome in MODELOS_APROVADOS:
-        try:
-            model = genai.GenerativeModel(model_name=modelo_nome, generation_config=config_ia)
-            response = model.generate_content(prompt)
-            texto = response.text.strip().replace("*", "")
-            if texto: return texto
-        except: continue
-    return f"🏀 {visitante} e {mandante} prometem um duelo intenso com jogadas de tirar o fôlego."
+    if m_basket:
+        entradas.append(f"👤 {m_basket} 20+ pontos")
+    if v_basket:
+        entradas.append(f"👤 {v_basket} 20+ pontos")
 
-def comentar_jogador_ia(nome_jogador, eh_reserva=False):
-    """Gera comentários naturais de até 7 palavras no futuro e sem repetir o nome."""
-    if not api_key: return "Promete incendiar a quadra hoje"
-    genai.configure(api_key=api_key)
-    config_ia = genai.GenerationConfig(temperature=0.9)
-    
-    contexto = f"O jogador {nome_jogador} assume a responsabilidade pois o principal está fora." if eh_reserva else f"O craque {nome_jogador} chega voando."
+    texto = f"""
+🏀 {mandante} x {visitante}
 
-    prompt = f"""
-    Comente o que o {nome_jogador} VAI fazer no jogo de hoje em no máximo 7 palavras.
-    Estilo: Resenha de basquete, natural e focado no FUTURO.
-    
-    REGRAS:
-    1. PROIBIDO repetir o nome "{nome_jogador}". 
-    2. PROIBIDO prometer pontos exatos.
-    3. Foque na vibe: "vai incendiar a quadra", "domina o garrafão e crava", "explode no ataque hoje".
-    """
+📊 CONFRONTO
+🏀🔥 {confronto}
 
-    for modelo_nome in MODELOS_APROVADOS:
-        try:
-            model = genai.GenerativeModel(model_name=modelo_nome, generation_config=config_ia)
-            response = model.generate_content(prompt)
-            res = response.text.strip().replace("*", "").replace("(", "").replace(")", "").replace(".", "")
-            if res: return res
-        except: continue
-    return "Promete comandar as ações ofensivas hoje"
+⭐️ DESTAQUES
+🔥 {m_basket if m_basket else "Sem destaque definido"}
+🔥 {v_basket if v_basket else "Sem destaque definido"}
+
+🔥 POSSÍVEIS ENTRADAS
+""" + "\n".join(entradas)
+
+    return texto.strip()

@@ -1,52 +1,104 @@
-# C:\inteligencia_bots\tips_bot\app.py
+from datetime import datetime
+from services.fetch_data import (
+    buscar_jogos_dia,
+    media_ultimos_3_jogos,
+    buscar_cestinha,
+    salvar_cestinha
+)
+from services.ai_generator import gerar_bilhete
+from services.notifier_telegram import enviar_telegram
 import psycopg2
 import os
-import schedule
-import time
-from dotenv import dotenv_values
-from datetime import datetime
-from services.fetch_data import buscar_jogos_hoje, buscar_lesoes, analisar_estatisticas_time
-from services.notifier_telegram import enviar_telegram, enviar_lista_agenda
-from services.ai_generator import gerar_analise_confronto, comentar_jogador_ia
+from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-config = dotenv_values(os.path.join(BASE_DIR, ".env"))
+load_dotenv()
 
-def tarefa_completa():
-    print(f"\n🚀 INICIANDO BOT: {datetime.now().strftime('%H:%M:%S')}")
-    lesoes = buscar_lesoes()
-    jogos = buscar_jogos_hoje()
-    
-    if jogos: enviar_lista_agenda(jogos)
-    
+
+def salvar_tip(game, dados):
+    conn = psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        dbname=os.getenv("DB_NAME"),
+        port=os.getenv("DB_PORT"),
+    )
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO tips_list (
+            game_id, dt_game, principal, visitor,
+            m_media_3, v_media_3,
+            m_basket, m_basket_ppg,
+            v_basket, v_basket_ppg,
+            confronto_analise
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (game_id) DO NOTHING
+    """, (
+        game["game_id"],
+        game["data"],
+        dados["mandante"],
+        dados["visitante"],
+        dados["m_media"],
+        dados["v_media"],
+        dados["m_basket"],
+        dados["m_basket_ppg"],
+        dados["v_basket"],
+        dados["v_basket_ppg"],
+        dados["texto"]
+    ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def main():
+    print(f"\n🚀 INICIANDO PROCESSAMENTO: {datetime.now()}")
+    jogos = buscar_jogos_dia()
+
     for jogo in jogos:
-        mandante, visitante = jogo['mandante_nome'], jogo['visitante_nome']
-        stats_m = analisar_estatisticas_time(mandante)
-        stats_v = analisar_estatisticas_time(visitante)
-        m_media, v_media = stats_m['media_3_jogos'], stats_v['media_3_jogos']
-        
-        if m_media > 100 or v_media > 100:
-            # Mandante
-            c_m = stats_m['cestinhas']
-            m_is_out = "out" in str(lesoes.get(c_m[0]['nome'].lower(), "")).lower()
-            m_final = c_m[1] if m_is_out else c_m[0]
-            
-            # Visitante
-            c_v = stats_v['cestinhas']
-            v_is_out = "out" in str(lesoes.get(c_v[0]['nome'].lower(), "")).lower()
-            v_final = c_v[1] if v_is_out else c_v[0]
+        m = jogo["mandante"]
+        v = jogo["visitante"]
 
-            dados = {
-                "game_id": jogo['game_id'], "principal": mandante, "visitor": visitante,
-                "m_media_3": m_media, "v_media_3": v_media,
-                "confronto_analise": gerar_analise_confronto(mandante, visitante, m_media, v_media),
-                "m_basket": m_final['nome'], "m_comentario": comentar_jogador_ia(m_final['nome'], m_is_out),
-                "v_basket": v_final['nome'], "v_comentario": comentar_jogador_ia(v_final['nome'], v_is_out),
-                "m_final_nome": m_final['nome'], "m_final_ppg": m_final['ppg'],
-                "v_final_nome": v_final['nome'], "v_final_ppg": v_final['ppg']
-            }
-            enviar_telegram(dados)
-            print(f"✅ Enviado: {visitante} x {mandante}")
+        print(f"\n🏀 {m['team']['displayName']} x {v['team']['displayName']}")
+
+        m_media = media_ultimos_3_jogos(m["team"]["id"])
+        v_media = media_ultimos_3_jogos(v["team"]["id"])
+
+        print(f"📊 Média últimos 3 jogos: {m_media} / {v_media}")
+
+        m_basket, m_ppg = buscar_cestinha(m["team"]["id"])
+        v_basket, v_ppg = buscar_cestinha(v["team"]["id"])
+
+        if m_basket:
+            salvar_cestinha(m["team"]["id"], m["team"]["displayName"], m_basket, m_ppg)
+        if v_basket:
+            salvar_cestinha(v["team"]["id"], v["team"]["displayName"], v_basket, v_ppg)
+
+        texto = gerar_bilhete(
+            mandante=m["team"]["displayName"],
+            visitante=v["team"]["displayName"],
+            m_media=m_media,
+            v_media=v_media,
+            m_basket=m_basket,
+            v_basket=v_basket
+        )
+
+        dados = {
+            "mandante": m["team"]["displayName"],
+            "visitante": v["team"]["displayName"],
+            "m_media": m_media,
+            "v_media": v_media,
+            "m_basket": m_basket,
+            "m_basket_ppg": m_ppg,
+            "v_basket": v_basket,
+            "v_basket_ppg": v_ppg,
+            "texto": texto
+        }
+
+        salvar_tip(jogo, dados)
+        enviar_telegram(texto)
+
 
 if __name__ == "__main__":
-    tarefa_completa()
+    main()

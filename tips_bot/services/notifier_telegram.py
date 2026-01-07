@@ -1,74 +1,39 @@
-# C:\inteligencia_bots\tips_bot\services\notifier_telegram.py
-import requests
-import math
 import os
-from dotenv import dotenv_values
+import requests
+from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-env_path = os.path.join(BASE_DIR, ".env")
-config = dotenv_values(env_path)
-TOKEN = config.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = config.get("TELEGRAM_CHAT_ID")
+load_dotenv()
 
-def calcular_linha_jogador(ppg):
-    if ppg < 10: return "10+"
-    linha = math.floor(ppg / 5) * 5
-    return f"{linha}+"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def get_sobrenome(nome_completo):
-    if not nome_completo or nome_completo == "N/A": return ""
-    return nome_completo.split()[-1]
 
-def get_nome_curto_time(nome_time):
-    if not nome_time: return ""
-    return nome_time.split()[-1]
+def enviar_telegram(texto):
+    """
+    Envia TEXTO pronto para o Telegram.
+    Não monta bilhete.
+    Não interpreta dados.
+    """
 
-def enviar_lista_agenda(jogos):
-    if not TOKEN or not CHAT_ID: return
-    msg = "📅 **AGENDA NBA DE HOJE**\n\n"
-    for jogo in jogos:
-        hora = jogo.get('hora', '--:--')
-        m = get_nome_curto_time(jogo['mandante_nome'])
-        v = get_nome_curto_time(jogo['visitante_nome'])
-        msg += f"🕒 {hora} - {v} x {m}\n"
-    msg += "\n🤖 *A análise detalhada será enviada em breve!*"
+    if not texto:
+        print("⚠️ Texto vazio. Nada enviado ao Telegram.")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": texto,
+        "parse_mode": "HTML"
+    }
+
     try:
-        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"})
-    except: pass
+        resp = requests.post(url, data=payload, timeout=10)
 
-def formatar_bilhete(dados):
-    m_nome_curto = get_nome_curto_time(dados['principal'])
-    v_nome_curto = get_nome_curto_time(dados['visitor'])
+        if resp.status_code == 200:
+            print("📨 Bilhete enviado ao Telegram com sucesso.")
+        else:
+            print(f"❌ Erro Telegram: {resp.status_code} - {resp.text}")
 
-    msg = f"🏀 {dados['visitor']} x {dados['principal']}\n\n"
-    
-    msg += "📊 CONFRONTO\n\n"
-    msg += f"🏀🔥 {dados.get('confronto_analise', '').strip()}\n\n"
-    
-    msg += "⭐️ DESTAQUES\n\n"
-    if dados['m_basket'] != "N/A":
-        msg += f"🔥 {dados['m_basket']} ({dados.get('m_comentario', '')})\n"
-    if dados['v_basket'] != "N/A":
-        msg += f"🔥 {dados['v_basket']} ({dados.get('v_comentario', '')})\n"
-    
-    msg += "--------------------------------------------------------------------\n"
-    msg += "🔥 POSSÍVEIS ENTRADAS\n\n"
-    
-    if dados['v_media_3'] > 100:
-        msg += f"🏀 {v_nome_curto} 110+ pontos\n"
-    if dados['m_media_3'] > 100:
-        msg += f"🏀 {m_nome_curto} 110+ pontos\n"
-        
-    if dados['v_final_nome'] != "N/A":
-        msg += f"👤 {get_sobrenome(dados['v_final_nome'])} {calcular_linha_jogador(dados['v_final_ppg'])} pontos\n"
-    if dados['m_final_nome'] != "N/A":
-        msg += f"👤 {get_sobrenome(dados['m_final_nome'])} {calcular_linha_jogador(dados['m_final_ppg'])} pontos\n"
-
-    return msg
-
-def enviar_telegram(dados_jogo):
-    if not TOKEN or not CHAT_ID: return
-    try:
-        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
-                      json={"chat_id": CHAT_ID, "text": formatar_bilhete(dados_jogo)})
-    except: pass
+    except Exception as e:
+        print(f"❌ Falha ao enviar Telegram: {e}")
