@@ -170,11 +170,11 @@ def main_loop_control():
     
     # 2ª: FASE 1 (Agenda + Status News)
     # Defina aqui o horário oficial ou de teste (Ex: "15:30")
-    schedule.every().day.at("22:32").do(job_fase_1_tarde)
+    schedule.every().day.at("00:12").do(job_fase_1_tarde)
     
     # 3ª: FASE 2 (Choque + Bilhete)
     # Defina aqui o horário oficial ou de teste (Ex: "16:30")
-    schedule.every().day.at("22:33").do(job_fase_2_final)
+    schedule.every().day.at("00:12").do(job_fase_2_final)
 
     # Executa uma atualização imediata ao ligar o bot para garantir dados
     log.info("⚡ Executando atualização inicial de dados...")
