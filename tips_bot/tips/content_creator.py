@@ -15,14 +15,15 @@ log.info(f"🧠 Modelo de IA carregado: {model_name} (Temp 0.4)")
 
 def gerar_agenda_simplificada(jogos):
     """
-    Gera o 1º Envio: Agenda formatada.
+    Gera o 1º Envio: Agenda formatada com HORÁRIO REAL.
     """
     texto = "📅 <b>AGENDA NBA DE HOJE</b>\n\n"
     
     for j in jogos:
-        # Formatação: 🕒 20:00 - TimeA x TimeB
+        # Formatação: 🕒 HH:MM - TimeA x TimeB
+        # Usamos o campo 'horario' que agora é calculado no main.py
         confronto = f"<b>{j['nome_casa']}</b> x <b>{j['nome_fora']}</b>"
-        texto += f"🕒 20:00 - {confronto}\n"
+        texto += f"🕒 {j['horario']} - {confronto}\n"
     
     texto += "\n🤖 A análise detalhada será enviada!"
     return texto
@@ -148,7 +149,6 @@ def preparar_bilhete_free(partida):
 def gerar_choque_formatado(time_vant, time_rival):
     """
     Alerta de Choque de Estilos com Estratégia MÚLTIPLA.
-    (Separadores === removidos)
     """
     # 1. Geração do Texto de Alerta (IA)
     prompt = (
@@ -182,11 +182,9 @@ def gerar_choque_formatado(time_vant, time_rival):
         p_off_stats = buscar_dados("SELECT avg_points FROM league_offensive_rankings WHERE player_name = %s", (p_name,))
         
         if p_off_stats:
-            # Se achou pontos, usa pontos (conforme regra)
             pts_def = calcular_palpite_par(p_off_stats[0]['avg_points'])
             multipla.append(f"✔️ {p_name} {pts_def}+ pontos")
         else:
-            # Fallback: Se não achou pontos, usa a estatística defensiva (Toco/Roubo)
             stl = float(def_data[0]['avg_steals'])
             blk = float(def_data[0]['avg_blocks'])
             
@@ -199,10 +197,8 @@ def gerar_choque_formatado(time_vant, time_rival):
                 line_type = "toco" if val == 0.5 else "tocos"
                 multipla.append(f"✔️ {p_name} {val}+ {line_type}")
 
-    # Montagem das linhas da múltipla
     lines_multipla = "\n".join(multipla)
 
-    # Retorno SEM OS SEPARADORES ===
     return (f"🚨 <b>ALERTA DE CHOQUE DE ESTILOS</b> 🚨\n"
             f"(Diferença defensiva e ofensiva)\n\n"
             f"{texto_ia}\n\n"
