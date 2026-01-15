@@ -18,3 +18,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# ---fluxo---
+
+fluxo.txt
